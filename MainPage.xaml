@@ -14,6 +14,7 @@
             <Image x:Name="imgIcon" HorizontalAlignment="Right" Height="100" Margin="0,0,0,0" VerticalAlignment="Top" Width="100"/>
 
         </StackPanel>
+        <TextBlock x:Name="txtDebugStats" HorizontalAlignment="Left" Margin="715,46,0,0" TextWrapping="Wrap" Text="TextBlock" VerticalAlignment="Top" Height="60" Width="282"/>
 
     </Grid>
 </Page>

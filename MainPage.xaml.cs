@@ -16,6 +16,7 @@ using Windows.UI.Xaml.Media.Imaging;
 using Windows.UI.Xaml.Navigation;
 using System.Collections;
 using System.Collections.Concurrent;
+using System.Threading.Tasks;
 
 // The Blank Page item template is documented at http://go.microsoft.com/fwlink/?LinkId=402352&clcid=0x409
 
@@ -29,7 +30,80 @@ namespace lotro_items
         ItemDescription _currentItem = null;
         private Windows.UI.Core.CoreDispatcher _mainThreadDispatcher = Windows.UI.Core.CoreWindow.GetForCurrentThread().Dispatcher;
         private ConcurrentBag<ItemDescription> _cachedItems = new ConcurrentBag<ItemDescription>();
+        private ConcurrentDictionary<string, bool> _visitedPages = new ConcurrentDictionary<string, bool>();
 
+        private async void _updateStats()
+        {
+            _mainThreadDispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
+            {
+                txtDebugStats.Text = string.Format("URLs Processed: {0}\nItems Proccessed: {1}", _visitedPages.Count, _cachedItems.Count);
+            });
+        }
+
+        private void _crawlPage(string url)
+        {
+            if(_visitedPages.ContainsKey(url))
+            {
+                return;
+            }
+            else
+            {
+                _visitedPages.TryAdd(url, true);
+
+                if(_visitedPages.Count % 25 == 0)
+                {
+                    _updateStats();
+                }
+            }
+
+            WikiRequest requestCloak = new WikiRequest(url);
+            requestCloak.sendRequest().ContinueWith(async body =>
+            {
+                string bodyText = body.Result;
+                HtmlDocument htmlDoc = new HtmlDocument();
+                htmlDoc.OptionFixNestedTags = true;
+                htmlDoc.LoadHtml(bodyText);
+
+                List<string> linksCache = new List<string>();
+                var links = htmlDoc.DocumentNode.Descendants("a");
+                string parentUrl = UrlHelper.GetDomain(requestCloak.URL);
+
+                foreach (var element in links)
+                {
+                    // Arbitrary wait
+                    await Task.Delay(TimeSpan.FromMilliseconds(200));
+
+                    if (element.Attributes.Contains("href"))
+                    {
+                        string uri = element.Attributes["href"].Value;
+                        string domain = UrlHelper.GetDomain(uri);
+                        if (domain.Empty())
+                        {
+                            uri = parentUrl + uri;
+                        }
+                        else if (domain != parentUrl) // Off-site URL, ignore
+                        {
+                            continue;
+                        }
+
+                        if (uri.Contains("Item:"))
+                        {
+                            new WikiRequest(uri).requestItem().ContinueWith(itemRequest =>
+                            {
+                                if (itemRequest.Result != null)
+                                {
+                                    _cachedItems.Add(itemRequest.Result);
+                                }
+                            });
+
+                        }
+                        _crawlPage(uri);
+                    }
+                }
+
+            });
+
+        }
 
         public MainPage()
         {
@@ -50,38 +124,7 @@ namespace lotro_items
             */
 
 
-           
-
-            WikiRequest requestCloak = new WikiRequest("https://lotro-wiki.com/index.php/Light_Armour_(Level_1-20)_Index");
-            requestCloak.sendRequest().ContinueWith(body =>
-            {
-                string bodyText = body.Result;
-                HtmlDocument htmlDoc = new HtmlDocument();
-                htmlDoc.OptionFixNestedTags = true;
-                htmlDoc.LoadHtml(bodyText);
-
-                List<string> linksCache = new List<string>();
-                var links = htmlDoc.DocumentNode.Descendants("a");
-
-                foreach(var element in links)
-                {
-                    if (element.Attributes.Contains("href"))
-                    {
-                        string uri = "https://lotro-wiki.com" + element.Attributes["href"].Value;
-                        if (uri.Contains("Item:"))
-                        {
-                            new WikiRequest(uri).requestItem().ContinueWith(itemRequest =>
-                             {
-                                 if (itemRequest.Result != null)
-                                 {
-                                     _cachedItems.Add(itemRequest.Result);
-                                 }
-                             });
-                        }
-                    }
-                }
-
-            });
+            _crawlPage("https://lotro-wiki.com/index.php/Category:Items_by_Level");
             
         }
 

@@ -10,6 +10,7 @@ namespace lotro_items
 {
     public static class EnumHelper
     {
+        
         public static TEnum TryFromString<TEnum>(string str) where TEnum : struct
         {
             string parsedString = str;
@@ -29,7 +30,7 @@ namespace lotro_items
             catch (ArgumentException)
             { }
 
-            Debug.Fail("Invalid enum value");
+            //Debug.Fail("Invalid enum value");
             return default(TEnum);
         }
     }

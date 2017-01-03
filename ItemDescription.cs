@@ -42,13 +42,18 @@ namespace lotro_items
 
     enum ItemBindingType
     {
+        Invalid,
+
         BindToAccountOnAcquire,
+        BindToAccount,
         BindOnEquip,
         BindOnAcquire
     }
 
     enum ItemCategory
     {
+        Invalid,
+
         // Armor
         Chest,
         Cloak,
@@ -59,12 +64,18 @@ namespace lotro_items
         Shield,
         Shoulder,
 
+        // Weapons
+        Dagger,
+
         HeavyArmour,
         HeavyShield,
 
         LightArmour,
 
         MediumArmour,
+
+        // Misc
+        Ingredient,
 
 
         // Jewelery
@@ -77,12 +88,16 @@ namespace lotro_items
 
     enum ItemDurabilityType
     {
+        Invalid,
+
         Normal,
         Tough
     }
 
     enum ItemAttributeType
     {
+        Invalid,
+
         Will,
         Fate,
         CriticalRaiting,
@@ -94,12 +109,38 @@ namespace lotro_items
         EvadeRating,
         PhysicalMasteryRating,
         TacticalMasteryRating,
-        MaximunMorale = MaximumMorale,
         CriticalDefense,
-        MaximunPower = MaximumPower,
         InCombatMoraleRegen,
         CriticalDefence,
+        FinesseRating,
+        FireMitigation,
+        Might,
+        TacticalMitigation,
+        TacticalCriticalMultiplier,
+        ShadowDefence,
+        OutOfCombatRunSpeed,
+        AutoAttackCriticalHitChance,
+        ParryRating,
+        ResistanceRating,
+        PhysicalMitigation,
 
+        // Typos
+        MaximunMorale = MaximumMorale,
+        MaximunPower = MaximumPower,
+    }
+
+    public enum ItemAttributeBuffType
+    {
+        Invalid,
+
+        Absolute,
+        Percent,
+    }
+
+    struct ItemAttributeBuff
+    {
+        public ItemAttributeBuffType Type { get; set; }
+        public int Value { get; set; }
     }
 
     class ItemDurabilityInfo
@@ -126,8 +167,9 @@ namespace lotro_items
         public ItemDurabilityInfo Durability { get; set; } = new ItemDurabilityInfo();
         public int MinimumLevel { get; set; }
         public CurrencyAmmount Worth { get; set; } = new CurrencyAmmount();
-        public Dictionary<ItemAttributeType, int> Attributes { get; set; } = new Dictionary<ItemAttributeType, int>();
+        public Dictionary<ItemAttributeType, ItemAttributeBuff> Attributes { get; set; } = new Dictionary<ItemAttributeType, ItemAttributeBuff>();
         public int Armor { get; set; }
+        public float DPS { get; set; }
 
         public override string ToString()
         {
@@ -145,7 +187,7 @@ namespace lotro_items
             sb.AppendLine("Attributes: " + (Attributes.Count == 0 ? "None" : ""));
             foreach(var attribute in Attributes)
             {
-                sb.AppendLine(string.Format(" {0} {1}", (attribute.Value < 0 ? "-" : "+") + attribute.Value.ToString(), attribute.Key));
+                sb.AppendLine(string.Format(" {0}{1}{2} {3}", (attribute.Value.Value < 0 ? "-" : "+"), attribute.Value.ToString(), attribute.Value.Type == ItemAttributeBuffType.Percent ? "%" : "", attribute.Key));
             }
 
             return sb.ToString();
@@ -166,14 +208,15 @@ namespace lotro_items
 
         private static bool _tryParseAttribute(string value, ref ItemDescription itemStats)
         {
-            Regex attributeRegex = new Regex("([+-]?[0-9]+)\\s+([a-zA-Z -]+)");
+            Regex attributeRegex = new Regex("([+-]?[0-9]+)\\s?%?\\s+([a-zA-Z -]+)");
             var attributeRegexMatch = attributeRegex.Matches(value);
             if (attributeRegexMatch.Count == 1)
             {
                 int arrtibuteLevel = int.Parse(attributeRegexMatch[0].Groups[1].Value);
                 ItemAttributeType attributeType = EnumHelper.TryFromString<ItemAttributeType>(attributeRegexMatch[0].Groups[2].Value);
+                ItemAttributeBuffType buffType = value.Contains("%") ? ItemAttributeBuffType.Percent : ItemAttributeBuffType.Absolute;
 
-                itemStats.Attributes.Add(attributeType, arrtibuteLevel);
+                itemStats.Attributes.Add(attributeType, new ItemAttributeBuff() { Value = arrtibuteLevel, Type = buffType });
 
                 return true;
             }
@@ -225,6 +268,20 @@ namespace lotro_items
             if (armourValueMatch.Count == 1)
             {
                 itemStats.Armor = int.Parse(armourValueMatch[0].Groups[1].Value);
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool _tryParseDPS(string value, ref ItemDescription itemStats)
+        {
+            Regex dpsRegex = new Regex("([0-9]+(\\.[0-9]+)?)\\s+[dD][pP][sS]");
+            var dpsMatch = dpsRegex.Matches(value);
+            if (dpsMatch.Count == 1)
+            {
+                itemStats.DPS = float.Parse(dpsMatch[0].Groups[1].Value);
 
                 return true;
             }
@@ -292,13 +349,7 @@ namespace lotro_items
                 ItemDescription result = new ItemDescription();
 
 
-                await rootNode.FindChildClassContains("image").ContinueWith(imageQuery =>
-                {
-                    if (imageQuery.Result != null)
-                    {
-                        result.IconURL = imageQuery.Result.FirstChild.Attributes["src"].Value;
-                    }
-                });
+                result.IconURL = rootNode.FirstChild.FirstChild.FirstChild.FirstChild.Attributes["src"].Value;
 
 
                 var titleElements = rootNode.Descendants("span").Where(d => d.Attributes.Contains("class") && d.Attributes["class"].Value.StartsWith("qc-"));
@@ -313,9 +364,8 @@ namespace lotro_items
                     var detailElements = detailElementsElem.First();
 
                     // Binding Type
-                    await detailElements.FindChildTitleContains("Bind On", true).ContinueWith(bindResult =>
+                    await detailElements.FindChildTitleContains("Bind", false).ContinueWith(bindResult =>
                     {
-                        Debug.Assert(bindResult.Result != null, "No binding field found");
                         if (bindResult.Result != null)
                         {
                             result.BindingType = EnumHelper.TryFromString<ItemBindingType>(bindResult.Result.InnerText);
@@ -323,7 +373,7 @@ namespace lotro_items
                     });
 
                     // Item Level
-                    await detailElements.FindChildTextContains("Item Level", true).ContinueWith(levelResult =>
+                    await detailElements.FindChildTextContains("Item Level", false).ContinueWith(levelResult =>
                     {
                         if (levelResult.Result != null)
                         {
@@ -335,11 +385,11 @@ namespace lotro_items
                     // Item Category
                     await detailElements.FindChildTitleContains("Category:", true).ContinueWith(categoryResult =>
                     {
-                        Debug.Assert(categoryResult.Result != null, "No category field found");
                         if (categoryResult.Result != null)
                         {
                             result.Category = EnumHelper.TryFromString<ItemCategory>(categoryResult.Result.InnerText);
                         }
+
                     });
 
                     // Armour Value
@@ -347,8 +397,13 @@ namespace lotro_items
                     {
                         if (armourValueQuery.Result != null)
                         {
-                            bool parsedArmour = _tryParseArmourLevel(armourValueQuery.Result.InnerText, ref result);
-                            Debug.Assert(parsedArmour, "Could not parse armor");
+                            if(! _tryParseArmourLevel(armourValueQuery.Result.InnerText, ref result))
+                            {
+                                if(!_tryParseDPS(armourValueQuery.Result.InnerText, ref result))
+                                {
+                                    Debug.Fail("Could not parse armor/DPS");
+                                }
+                            }
                         }
                     });
 
@@ -367,8 +422,11 @@ namespace lotro_items
                                         attributeText += child.NextSibling.InnerText;
                                     }
 
-                                    bool parsedAttribute = _tryParseAttribute(attributeText, ref result);
-                                    Debug.Assert(parsedAttribute, "Could not parse item attribute");
+                                    if (!attributeText.Contains(":"))
+                                    {
+                                        bool parsedAttribute = _tryParseAttribute(attributeText, ref result);
+                                        Debug.Assert(parsedAttribute, "Could not parse item attribute");
+                                    }
                                 }
                             }
                         }

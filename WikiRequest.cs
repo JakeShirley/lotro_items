@@ -7,23 +7,29 @@ namespace lotro_items
 
     class WikiRequest
     {
-        private string _url;
+        public string URL { get; }
         public WikiRequest(string url)
         {
-            _url = url;
+            URL = url;
         }
 
         public async Task<ItemDescription> requestItem()
         {
             string body = await sendRequest();
-            ItemDescription result = await ItemDescription.FromWebPage(body);
+            ItemDescription result = null;
 
-            if(result != null) {
-                Regex urlRegex = new Regex("^(?:https?:\\/\\/)?(?:[^@\\/\n]+@)?(?:www\\.)?([^:\\/\\n]+)");
-                var urlMatch = urlRegex.Match(_url);
-                if(urlMatch.Groups.Count > 0)
+            if (body != null)
+            {
+                result = await ItemDescription.FromWebPage(body);
+
+                if (result != null)
                 {
-                    result.IconURL = urlMatch.Groups[0].Value + result.IconURL;
+                    Regex urlRegex = new Regex("^(?:https?:\\/\\/)?(?:[^@\\/\n]+@)?(?:www\\.)?([^:\\/\\n]+)");
+                    var urlMatch = urlRegex.Match(URL);
+                    if (urlMatch.Groups.Count > 0)
+                    {
+                        result.IconURL = urlMatch.Groups[0].Value + result.IconURL;
+                    }
                 }
             }
 
@@ -52,7 +58,7 @@ namespace lotro_items
                 throw new Exception("Invalid header value: " + header);
             }
 
-            Uri requestUri = new Uri(_url);
+            Uri requestUri = new Uri(URL);
 
             //Send the GET request asynchronously and retrieve the response as a string.
             Windows.Web.Http.HttpResponseMessage httpResponse = new Windows.Web.Http.HttpResponseMessage();
@@ -62,12 +68,15 @@ namespace lotro_items
             {
                 //Send the GET request
                 httpResponse = await httpClient.GetAsync(requestUri);
-                httpResponse.EnsureSuccessStatusCode();
-                httpResponseBody = await httpResponse.Content.ReadAsStringAsync();
+                httpClient.Dispose();
+                if (httpResponse.IsSuccessStatusCode)
+                {
+                    httpResponseBody = await httpResponse.Content.ReadAsStringAsync();
+                }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                httpResponseBody = "Error: " + ex.HResult.ToString("X") + " Message: " + ex.Message;
+                return await sendRequest();
             }
 
             return httpResponseBody;
