@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HtmlAgilityPack;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -13,6 +14,8 @@ using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Media.Imaging;
 using Windows.UI.Xaml.Navigation;
+using System.Collections;
+using System.Collections.Concurrent;
 
 // The Blank Page item template is documented at http://go.microsoft.com/fwlink/?LinkId=402352&clcid=0x409
 
@@ -25,12 +28,14 @@ namespace lotro_items
     {
         ItemDescription _currentItem = null;
         private Windows.UI.Core.CoreDispatcher _mainThreadDispatcher = Windows.UI.Core.CoreWindow.GetForCurrentThread().Dispatcher;
+        private ConcurrentBag<ItemDescription> _cachedItems = new ConcurrentBag<ItemDescription>();
 
 
         public MainPage()
         {
             this.InitializeComponent();
 
+            /*
             WikiRequest paintedShell = new WikiRequest("https://lotro-wiki.com/index.php/Item%3AGleaming_Painted_Shell_(Level_99)");
             paintedShell.requestItem().ContinueWith(itemRequest =>
             {
@@ -42,6 +47,42 @@ namespace lotro_items
             {
                 ItemDescription result = itemRequest.Result;
             });
+            */
+
+
+           
+
+            WikiRequest requestCloak = new WikiRequest("https://lotro-wiki.com/index.php/Light_Armour_(Level_1-20)_Index");
+            requestCloak.sendRequest().ContinueWith(body =>
+            {
+                string bodyText = body.Result;
+                HtmlDocument htmlDoc = new HtmlDocument();
+                htmlDoc.OptionFixNestedTags = true;
+                htmlDoc.LoadHtml(bodyText);
+
+                List<string> linksCache = new List<string>();
+                var links = htmlDoc.DocumentNode.Descendants("a");
+
+                foreach(var element in links)
+                {
+                    if (element.Attributes.Contains("href"))
+                    {
+                        string uri = "https://lotro-wiki.com" + element.Attributes["href"].Value;
+                        if (uri.Contains("Item:"))
+                        {
+                            new WikiRequest(uri).requestItem().ContinueWith(itemRequest =>
+                             {
+                                 if (itemRequest.Result != null)
+                                 {
+                                     _cachedItems.Add(itemRequest.Result);
+                                 }
+                             });
+                        }
+                    }
+                }
+
+            });
+            
         }
 
         private void txtUrl_TextChanged(object sender, TextChangedEventArgs e)

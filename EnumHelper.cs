@@ -15,6 +15,7 @@ namespace lotro_items
             string parsedString = str;
             // Remove white space
             parsedString = Regex.Replace(parsedString, @"\s+", "");
+            parsedString = Regex.Replace(parsedString, "-", "");
             parsedString = parsedString.ToLower();
 
             try

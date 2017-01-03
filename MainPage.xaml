@@ -9,8 +9,11 @@
 
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
         <TextBox x:Name="txtUrl" HorizontalAlignment="Left" Margin="87,46,0,0" TextWrapping="Wrap" Text="TextBox" VerticalAlignment="Top" Height="60" Width="520" TextChanged="txtUrl_TextChanged"/>
-        <TextBox x:Name="txtDebugInfo" HorizontalAlignment="Left" Margin="87,178,0,0" TextWrapping="Wrap" Text="TextBox" VerticalAlignment="Top" Height="324" Width="549" IsReadOnly="True"/>
-        <Image x:Name="imgIcon" HorizontalAlignment="Left" Height="100" Margin="668,178,0,0" VerticalAlignment="Top" Width="100"/>
+        <StackPanel x:Name="stackPanelItems" HorizontalAlignment="Left" Height="278" Margin="87,178,0,0" VerticalAlignment="Top" Width="382" Orientation="Horizontal">
+            <TextBox x:Name="txtDebugInfo" HorizontalAlignment="Stretch" Margin="0,0,0,0" TextWrapping="Wrap" Text="TextBox" VerticalAlignment="Stretch" IsReadOnly="True" Width="239"/>
+            <Image x:Name="imgIcon" HorizontalAlignment="Right" Height="100" Margin="0,0,0,0" VerticalAlignment="Top" Width="100"/>
+
+        </StackPanel>
 
     </Grid>
 </Page>

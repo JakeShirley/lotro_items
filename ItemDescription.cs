@@ -1,5 +1,4 @@
 ﻿using HtmlAgilityPack;
-using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -32,6 +31,11 @@ namespace lotro_items
                 result += string.Format("{0} Copper ", Copper);
             }
 
+            if(result.Empty())
+            {
+                return "None";
+            }
+
             return result.Trim();
         }
     }
@@ -39,7 +43,8 @@ namespace lotro_items
     enum ItemBindingType
     {
         BindToAccountOnAcquire,
-        BindOnEquip
+        BindOnEquip,
+        BindOnAcquire
     }
 
     enum ItemCategory
@@ -87,6 +92,14 @@ namespace lotro_items
         CriticalRating,
         MaximumPower,
         EvadeRating,
+        PhysicalMasteryRating,
+        TacticalMasteryRating,
+        MaximunMorale = MaximumMorale,
+        CriticalDefense,
+        MaximunPower = MaximumPower,
+        InCombatMoraleRegen,
+        CriticalDefence,
+
     }
 
     class ItemDurabilityInfo
@@ -114,6 +127,7 @@ namespace lotro_items
         public int MinimumLevel { get; set; }
         public CurrencyAmmount Worth { get; set; } = new CurrencyAmmount();
         public Dictionary<ItemAttributeType, int> Attributes { get; set; } = new Dictionary<ItemAttributeType, int>();
+        public int Armor { get; set; }
 
         public override string ToString()
         {
@@ -127,6 +141,7 @@ namespace lotro_items
             sb.AppendLine("Durability: " + Durability.ToString());
             sb.AppendLine("Minimum Level: " + MinimumLevel);
             sb.AppendLine("Worth: " + Worth.ToString());
+            sb.AppendLine("Armour: " + Armor.ToString());
             sb.AppendLine("Attributes: " + (Attributes.Count == 0 ? "None" : ""));
             foreach(var attribute in Attributes)
             {
@@ -151,7 +166,7 @@ namespace lotro_items
 
         private static bool _tryParseAttribute(string value, ref ItemDescription itemStats)
         {
-            Regex attributeRegex = new Regex("([+-]?[0-9]+)\\s+([a-zA-Z ]+)");
+            Regex attributeRegex = new Regex("([+-]?[0-9]+)\\s+([a-zA-Z -]+)");
             var attributeRegexMatch = attributeRegex.Matches(value);
             if (attributeRegexMatch.Count == 1)
             {
@@ -196,6 +211,20 @@ namespace lotro_items
 
                 itemStats.Durability.CurrentLevel = currentLevel;
                 itemStats.Durability.MaxLevel = maxLevel;
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool _tryParseArmourLevel(string value, ref ItemDescription itemStats)
+        {
+            Regex armourRegex = new Regex("([0-9]+)\\s+Armour");
+            var armourValueMatch = armourRegex.Matches(value);
+            if (armourValueMatch.Count == 1)
+            {
+                itemStats.Armor = int.Parse(armourValueMatch[0].Groups[1].Value);
 
                 return true;
             }
@@ -313,6 +342,16 @@ namespace lotro_items
                         }
                     });
 
+                    // Armour Value
+                    await detailElements.FindChildClassContains("khaki", true).ContinueWith(armourValueQuery =>
+                    {
+                        if (armourValueQuery.Result != null)
+                        {
+                            bool parsedArmour = _tryParseArmourLevel(armourValueQuery.Result.InnerText, ref result);
+                            Debug.Assert(parsedArmour, "Could not parse armor");
+                        }
+                    });
+
                     // Attributes
                     await detailElements.FindChildClassContains("attrib", true).ContinueWith(attributesResult =>
                     {
@@ -320,9 +359,15 @@ namespace lotro_items
                         {
                             foreach (var child in attributesResult.Result.ChildNodes)
                             {
-                                if (child.Name != "br" && child.Name != "div" && !child.InnerText.IsWhiteSpace())
+                                if (child.Name != "br" && child.Name != "div" && child.Name != "a" && !child.InnerText.IsWhiteSpace())
                                 {
-                                    bool parsedAttribute = _tryParseAttribute(child.InnerText, ref result);
+                                    string attributeText = child.InnerText;
+                                    if(child.NextSibling.Name == "a")
+                                    {
+                                        attributeText += child.NextSibling.InnerText;
+                                    }
+
+                                    bool parsedAttribute = _tryParseAttribute(attributeText, ref result);
                                     Debug.Assert(parsedAttribute, "Could not parse item attribute");
                                 }
                             }
@@ -330,11 +375,11 @@ namespace lotro_items
                     });
 
                     // Durability Type
-                    await detailElements.FindChildStyleContains("float: right", true).ContinueWith(durabilityTypeQuery =>
+                    await detailElements.FindChildTitleContains("Durability", true).ContinueWith(durabilityTypeQuery =>
                     {
                         if (durabilityTypeQuery.Result != null)
                         {
-                            result.Durability.Type = EnumHelper.TryFromString<ItemDurabilityType>(durabilityTypeQuery.Result.InnerText);
+                            result.Durability.Type = EnumHelper.TryFromString<ItemDurabilityType>(durabilityTypeQuery.Result.ParentNode.PreviousSibling.FirstChild.InnerText);
                         }
                     });
 
