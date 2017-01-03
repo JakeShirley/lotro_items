@@ -11,6 +11,7 @@ using Windows.UI.Xaml.Controls.Primitives;
 using Windows.UI.Xaml.Data;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
+using Windows.UI.Xaml.Media.Imaging;
 using Windows.UI.Xaml.Navigation;
 
 // The Blank Page item template is documented at http://go.microsoft.com/fwlink/?LinkId=402352&clcid=0x409
@@ -22,7 +23,7 @@ namespace lotro_items
     /// </summary>
     public sealed partial class MainPage : Page
     {
-        ItemStats _currentItem = null;
+        ItemDescription _currentItem = null;
         private Windows.UI.Core.CoreDispatcher _mainThreadDispatcher = Windows.UI.Core.CoreWindow.GetForCurrentThread().Dispatcher;
 
 
@@ -33,13 +34,13 @@ namespace lotro_items
             WikiRequest paintedShell = new WikiRequest("https://lotro-wiki.com/index.php/Item%3AGleaming_Painted_Shell_(Level_99)");
             paintedShell.requestItem().ContinueWith(itemRequest =>
             {
-                ItemStats result = itemRequest.Result;
+                ItemDescription result = itemRequest.Result;
             });
 
             WikiRequest requestCloak = new WikiRequest("https://lotro-wiki.com/index.php/Item%3AResolute_Cloak_of_Penetration_(Level_99)");
             requestCloak.requestItem().ContinueWith(itemRequest =>
             {
-                ItemStats result = itemRequest.Result;
+                ItemDescription result = itemRequest.Result;
             });
         }
 
@@ -51,7 +52,9 @@ namespace lotro_items
             _currentItem = itemRequest.Result;
 
                 _mainThreadDispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () => {
-                    txtDebugInfo.Text = _currentItem.PropertyList();
+                    txtDebugInfo.Text = _currentItem.ToString();
+                    imgIcon.Source = new BitmapImage(new Uri(_currentItem.IconURL, UriKind.Absolute));
+                    
                 });
             });
         }
